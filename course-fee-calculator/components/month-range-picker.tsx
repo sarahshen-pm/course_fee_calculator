@@ -182,19 +182,6 @@ export function MonthRangePicker({
               <Calendar className="h-4 w-4" />
               <span className="truncate">{displayText}</span>
             </div>
-            {value && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleClear()
-                }}
-                className="h-4 w-4 p-0 hover:bg-muted"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[600px]" align="start">

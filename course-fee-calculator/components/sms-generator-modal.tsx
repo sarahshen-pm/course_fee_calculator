@@ -20,6 +20,22 @@ interface SMSGeneratorModalProps {
 
 type Language = "en" | "zh-cn" | "zh-tw"
 
+// Format date to dd/mm/yyyy
+const formatDate = (dateString: string) => {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return dateString // Return original if invalid date
+    }
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  } catch {
+    return dateString // Return original if error
+  }
+}
+
 // Stable input component to prevent focus loss
 const StableInput = React.memo(({ 
   value, 
@@ -206,6 +222,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
     const avgFee = editableData.reduce((sum, s) => sum + s.fee_per_hour, 0) / editableData.length
     const students = editableData.map(s => s.name)
     const dates = editableData.map(s => s.date).sort()
+    const formattedDates = dates.map(date => formatDate(date))
     
     // 根据实际学生数量决定模板类型
     const uniqueStudents = Array.from(new Set(students))
@@ -217,8 +234,8 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
       .replace(/\[Average Fee\]/g, avgFee.toFixed(2))
       .replace(/\[Sum of Hours\]/g, totalHours.toFixed(1))
       .replace(/\[Total Fee\]/g, totalFee.toFixed(2))
-      .replace(/\[Smallest Date\]/g, dates[0] || "")
-      .replace(/\[Largest Date\]/g, dates[dates.length - 1] || "")
+      .replace(/\[Smallest Date\]/g, formattedDates[0] || "")
+      .replace(/\[Largest Date\]/g, formattedDates[formattedDates.length - 1] || "")
 
     if (isMultiple && uniqueStudents.length >= 2) {
       // Multiple template: 替换学生姓名和各自的小时数
@@ -430,7 +447,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                   size="sm" 
                   onClick={() => setShowRemarks(!showRemarks)}
                 >
-                  {showRemarks ? "隐藏备注" : "显示备注"}
+                  {showRemarks ? "Hide Remarks" : "Show Remarks"}
                 </Button>
                 <Button variant="outline" size="sm" onClick={addNewRow}>
                   Add Row
@@ -449,7 +466,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                     <th className="px-2 py-1 text-center text-xs font-medium w-20">Fee/Hour</th>
                     <th className="px-2 py-1 text-center text-xs font-medium w-20">Total</th>
                     {showRemarks && (
-                      <th className="px-2 py-1 text-left text-xs font-medium w-36">备注</th>
+                      <th className="px-2 py-1 text-left text-xs font-medium w-48">Remarks</th>
                     )}
                     <th className="px-2 py-1 text-center text-xs font-medium w-28">Actions</th>
                   </tr>
@@ -486,7 +503,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                             className="h-6 text-xs px-2 py-1 w-full"
                           />
                         ) : (
-                          <span className="text-xs whitespace-nowrap">{student.date}</span>
+                          <span className="text-xs whitespace-nowrap">{formatDate(student.date)}</span>
                         )}
                       </td>
                       <td className="px-2 py-1 text-center">
@@ -529,7 +546,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                               className="h-6 text-xs px-2 py-1 w-full"
                             />
                           ) : (
-                            <div className="text-xs truncate max-w-[140px]" title={student.title}>
+                            <div className="text-xs truncate max-w-[180px]" title={student.title}>
                               {student.title}
                             </div>
                           )}

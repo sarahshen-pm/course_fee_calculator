@@ -182,6 +182,22 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
 
   const canGenerateSMS = uniqueParentsInFilteredData.length === 1 && filteredProcessedData.length > 0
 
+  // Format date to dd/mm/yyyy
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        return dateString // Return original if invalid date
+      }
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      return `${day}/${month}/${year}`
+    } catch {
+      return dateString // Return original if error
+    }
+  }
+
   // Handle SMS Generator button click
   const handleSMSGenerator = () => {
     if (!canGenerateSMS) {
@@ -313,7 +329,7 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                   <DialogTrigger asChild>
                     <Button className="bg-primary hover:bg-primary/90 min-w-[180px]">
                       <Upload className="mr-2 h-4 w-4" />
-                      Paste & Process Data
+                      Input Data
                     </Button>
                   </DialogTrigger>
                 <DialogContent className="w-[80vw] h-[80vh] max-w-[80vw] max-h-[80vh] overflow-y-auto !p-4 !w-[80vw] !h-[80vh] !max-w-[80vw] !max-h-[80vh] sm:!max-w-[80vw]">
@@ -391,18 +407,12 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                   disabled={isLoadingProcessedData}
                   variant="outline"
                   size="sm"
-                  className="min-w-[100px]"
+                  className="w-10 h-9 p-0"
                 >
                   {isLoadingProcessedData ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading
-                    </>
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Refresh
-                    </>
+                    <RefreshCw className="h-4 w-4" />
                   )}
                 </Button>
                 
@@ -435,113 +445,164 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                     value={dateRangeFilter}
                     onChange={setDateRangeFilter}
                     placeholder="选择月份范围"
-                    width="w-[280px]"
+                    width="w-[200px]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-auto pt-1">
-              <table className="material-table w-full text-xs">
-                <thead className="sticky top-0 bg-background">
-                  <tr className="h-6">
-                    <th className="px-2 py-1 text-left text-xs font-medium">#</th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('parent')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Parent {getSortIcon('parent')}
-                      </span>
-                    </th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('name')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Name {getSortIcon('name')}
-                      </span>
-                    </th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('date')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Date {getSortIcon('date')}
-                      </span>
-                    </th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('hours')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Hours {getSortIcon('hours')}
-                      </span>
-                    </th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('fee_per_hour')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Fee/Hour {getSortIcon('fee_per_hour')}
-                      </span>
-                    </th>
-                    <th className="px-2 py-1 text-left text-xs font-medium">Total</th>
-                    <th 
-                      className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('accompany_number')}
-                    >
-                      <span className="flex items-center gap-1">
-                        Accompany {getSortIcon('accompany_number')}
-                      </span>
-                    </th>
-                    <th className="px-2 py-1 text-left text-xs font-medium">Title</th>
-                    <th className="px-2 py-1 text-left text-xs font-medium">Created</th>
+            <div className="flex-1 min-h-0 flex flex-col pt-1">
+              {/* Fixed Header */}
+              <div className="flex-shrink-0">
+                <table className="material-table w-full text-xs table-fixed">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col className="w-28" />
+                    <col className="w-16" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-32" />
+                    <col className="w-24" />
+                  </colgroup>
+                  <thead className="bg-background border-b border-border">
+                    <tr className="h-6">
+                      <th className="px-2 py-1 text-left text-xs font-medium">#</th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('parent')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Parent {getSortIcon('parent')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('name')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Name {getSortIcon('name')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('date')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Date {getSortIcon('date')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('hours')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Hours {getSortIcon('hours')}
+                        </span>
+                      </th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('fee_per_hour')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Fee/Hour {getSortIcon('fee_per_hour')}
+                        </span>
+                      </th>
+                      <th className="px-2 py-1 text-left text-xs font-medium">Total</th>
+                      <th 
+                        className="px-2 py-1 text-left text-xs font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('accompany_number')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Accompany {getSortIcon('accompany_number')}
+                        </span>
+                      </th>
+                      <th className="px-2 py-1 text-left text-xs font-medium">Title</th>
+                      <th className="px-2 py-1 text-left text-xs font-medium">Created</th>
                   </tr>
                 </thead>
+                </table>
+              </div>
+
+              {/* Scrollable Data Rows */}
+              <div className="flex-1 min-h-0 overflow-auto">
+                <table className="material-table w-full text-xs table-fixed">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col className="w-28" />
+                    <col className="w-16" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-32" />
+                    <col className="w-24" />
+                  </colgroup>
                 <tbody>
-                  {filteredProcessedData.map((item, index) => (
-                    <tr key={item.id || index} className="h-6 hover:bg-muted/50">
-                      <td className="px-2 py-1 text-center text-muted-foreground">{index + 1}</td>
-                      <td className="px-2 py-1">{item.parent}</td>
-                      <td className="px-2 py-1">{item.name}</td>
-                      <td className="px-2 py-1">{item.date}</td>
-                      <td className="px-2 py-1">{item.hours}</td>
-                      <td className="px-2 py-1">${item.fee_per_hour}</td>
-                      <td className="px-2 py-1">${(item.fee_per_hour * item.hours).toFixed(2)}</td>
-                      <td className="px-2 py-1">
-                        <Badge variant="outline" className="text-xs px-1 py-0">{item.accompany_number}</Badge>
-                      </td>
-                      <td className="px-2 py-1 max-w-[120px] truncate">{item.title}</td>
-                      <td className="px-2 py-1 text-xs text-muted-foreground">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </td>
+                    {filteredProcessedData.map((item, index) => (
+                      <tr key={item.id || index} className="h-6 hover:bg-muted/50">
+                        <td className="px-2 py-1 text-center text-muted-foreground">{index + 1}</td>
+                        <td className="px-2 py-1 truncate">{item.parent}</td>
+                        <td className="px-2 py-1 truncate">{item.name}</td>
+                        <td className="px-2 py-1 truncate">{formatDate(item.date)}</td>
+                        <td className="px-2 py-1">{item.hours}</td>
+                        <td className="px-2 py-1">${item.fee_per_hour}</td>
+                        <td className="px-2 py-1">${(item.fee_per_hour * item.hours).toFixed(2)}</td>
+                        <td className="px-2 py-1">
+                          <Badge variant="outline" className="text-xs px-1 py-0">{item.accompany_number}</Badge>
+                        </td>
+                        <td className="px-2 py-1 truncate">{item.title}</td>
+                        <td className="px-2 py-1 text-xs text-muted-foreground truncate">
+                          {formatDate(item.created_at)}
+                        </td>
                     </tr>
                   ))}
-                  
-                  {/* Summary row */}
-                  <tr className="h-8 bg-muted/30 border-t-2 border-primary/20 font-semibold">
-                    <td className="px-2 py-1 text-center text-muted-foreground">
-                      <span className="text-xs">Total</span>
-                    </td>
-                    <td className="px-2 py-1 text-muted-foreground">
-                      <span className="text-xs">{filteredProcessedData.length} records</span>
-                    </td>
-                    <td className="px-2 py-1"></td>
-                    <td className="px-2 py-1"></td>
-                    <td className="px-2 py-1 text-primary font-semibold">
-                      {totalHours.toFixed(1)}h
-                    </td>
-                    <td className="px-2 py-1"></td>
-                    <td className="px-2 py-1 text-primary font-semibold">
-                      ${totalFees.toFixed(2)}
-                    </td>
-                    <td className="px-2 py-1"></td>
-                    <td className="px-2 py-1"></td>
-                    <td className="px-2 py-1"></td>
-                  </tr>
                 </tbody>
               </table>
+            </div>
+
+              {/* Fixed Footer */}
+              <div className="flex-shrink-0">
+                <table className="material-table w-full text-xs table-fixed">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col className="w-28" />
+                    <col className="w-16" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-20" />
+                    <col className="w-32" />
+                    <col className="w-24" />
+                  </colgroup>
+                  <tbody>
+                    <tr className="h-8 bg-muted/30 border-t-2 border-primary/20 font-semibold">
+                      <td className="px-2 py-1 text-center text-muted-foreground">
+                        <span className="text-xs">Total</span>
+                      </td>
+                      <td className="px-2 py-1 text-muted-foreground">
+                        <span className="text-xs">{filteredProcessedData.length} records</span>
+                      </td>
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1 text-primary font-semibold">
+                        {totalHours.toFixed(1)}h
+                      </td>
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1 text-primary font-semibold">
+                        ${totalFees.toFixed(2)}
+                      </td>
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
       </div>
