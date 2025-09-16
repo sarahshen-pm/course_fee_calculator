@@ -322,9 +322,9 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
       {/* Processed Data Table - Now takes full width */}
       <div className="flex-1 flex flex-col min-h-0 space-y-2 pt-0">
             {/* Top row with buttons and filters */}
-            <div className="flex items-center justify-between gap-2 flex-shrink-0">
+            <div className="flex items-center justify-between gap-2 flex-shrink-0 flex-wrap">
               {/* Left side - Paste & Process Data button and SMS Generator button */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="bg-primary hover:bg-primary/90 min-w-[180px]">
@@ -401,7 +401,7 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
               </div>
               
               {/* Right side - Refresh button and filters */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   onClick={loadProcessedData}
                   disabled={isLoadingProcessedData}
@@ -416,13 +416,13 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                   )}
                 </Button>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <MultiSelectFilter
                     options={uniqueNames}
                     selected={nameFilter}
                     onSelectionChange={setNameFilter}
                     placeholder="Name"
-                    width="w-[160px]"
+                    width="w-[140px] md:w-[160px]"
                   />
                   
                   <MultiSelectFilter
@@ -430,7 +430,7 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                     selected={parentFilter}
                     onSelectionChange={setParentFilter}
                     placeholder="Parent"
-                    width="w-[160px]"
+                    width="w-[140px] md:w-[160px]"
                   />
                   
                   <MultiSelectFilter
@@ -438,20 +438,20 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                     selected={accompanyFilter}
                     onSelectionChange={setAccompanyFilter}
                     placeholder="Accompany"
-                    width="w-[140px]"
+                    width="w-[120px] md:w-[140px]"
                   />
                   
                   <MonthRangePicker
                     value={dateRangeFilter}
                     onChange={setDateRangeFilter}
                     placeholder="选择月份范围"
-                    width="w-[200px]"
+                    width="w-[180px] md:w-[200px]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col pt-1">
+            <div className="flex-1 min-h-0 flex flex-col pt-1" style={{ maxHeight: 'calc(100vh - 200px)' }}>
               {/* Fixed Header */}
               <div className="flex-shrink-0">
                 <table className="material-table w-full text-xs table-fixed">
@@ -527,7 +527,7 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
               </div>
 
               {/* Scrollable Data Rows */}
-              <div className="flex-1 min-h-0 overflow-auto">
+              <div className="flex-1 min-h-0 overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                 <table className="material-table w-full text-xs table-fixed">
                   <colgroup>
                     <col className="w-12" />
@@ -553,11 +553,11 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
                         <td className="px-2 py-1">${(item.fee_per_hour * item.hours).toFixed(2)}</td>
                         <td className="px-2 py-1">
                           <Badge variant="outline" className="text-xs px-1 py-0">{item.accompany_number}</Badge>
-                        </td>
+                      </td>
                         <td className="px-2 py-1 truncate">{item.title}</td>
                         <td className="px-2 py-1 text-xs text-muted-foreground truncate">
                           {formatDate(item.created_at)}
-                        </td>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

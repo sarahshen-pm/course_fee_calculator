@@ -403,8 +403,13 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="w-[95vw] h-[95vh] max-w-[95vw] max-h-[95vh] overflow-hidden"
-        style={{ width: '95vw', height: '95vh', maxWidth: '95vw', maxHeight: '95vh' }}
+        className="w-[90vw] h-[85vh] max-w-[90vw] max-h-[85vh] overflow-hidden sm:w-[95vw] sm:h-[95vh] sm:max-w-[95vw] sm:max-h-[95vh]"
+        style={{ 
+          width: '90vw', 
+          height: '85vh', 
+          maxWidth: '90vw', 
+          maxHeight: '85vh'
+        }}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -413,7 +418,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-8 overflow-hidden" style={{ height: 'calc(95vh - 80px)', display: 'flex' }}>
+        <div className="flex gap-8 overflow-hidden" style={{ height: 'calc(85vh - 80px)', display: 'flex' }}>
           {/* Left side - Editable student data table */}
           <div className="flex flex-col min-h-0 border-r pr-4" style={{ flex: '2', minWidth: '0' }}>
             <div className="flex items-center justify-between mb-4">

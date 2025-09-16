@@ -54,8 +54,8 @@ export function MonthRangePicker({
   }, [value])
 
   const months = [
-    "一月", "二月", "三月", "四月", "五月", "六月",
-    "七月", "八月", "九月", "十月", "十一月", "十二月"
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
   ]
 
   const handleMonthClick = (year: number, month: number) => {
@@ -112,12 +112,12 @@ export function MonthRangePicker({
   }
 
   const displayText = value 
-    ? `${value.startMonth} 至 ${value.endMonth}`
+    ? `${value.startMonth} to ${value.endMonth}`
     : placeholder
 
   const renderYearPanel = (year: number, isLeft: boolean) => (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b">
+      <div className="flex items-center justify-between p-2 border-b">
         <Button
           variant="ghost"
           size="sm"
@@ -126,7 +126,7 @@ export function MonthRangePicker({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="font-medium">{year} 年</span>
+        <span className="font-medium">{year}</span>
         <Button
           variant="ghost"
           size="sm"
@@ -136,7 +136,7 @@ export function MonthRangePicker({
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-      <div className="grid grid-cols-4 gap-1 p-3">
+      <div className="grid grid-cols-4 gap-1 p-2">
         {months.map((month, index) => {
           const inRange = isInRange(year, index)
           const selected = isSelected(year, index)
@@ -184,26 +184,26 @@ export function MonthRangePicker({
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[600px]" align="start">
+        <PopoverContent className="p-0 w-auto min-w-[500px]" align="start">
           <div className="flex">
             {renderYearPanel(currentYear, true)}
             <div className="w-px bg-border" />
             {renderYearPanel(currentYear + 1, false)}
           </div>
-          <div className="flex items-center justify-between p-3 border-t">
+          <div className="flex items-center justify-between p-2 border-t">
             <Button variant="ghost" size="sm" onClick={handleClear}>
-              清除
+              Clear
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-                取消
+                Cancel
               </Button>
               <Button 
                 size="sm" 
                 onClick={handleApply}
                 disabled={!selectedStart || !selectedEnd}
               >
-                确定
+                Apply
               </Button>
             </div>
           </div>
