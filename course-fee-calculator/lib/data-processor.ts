@@ -81,30 +81,42 @@ export interface RawScheduleData {
 
 // Step 1: Extract raw data from input text and save to schedule_data table
 export async function extractRawScheduleData(rawData: string) {
-  const { createClient } = await import('./supabase/client')
-  const supabase = createClient()
-
-  // Extract data using regex pattern - updated to handle your data format with multiline support
-  const pattern = /Title:(.*?)Startdate:(.*?)Enddate:(.*?)Duration:(.*?)(?=Title:|$)/gm
-  const matches = Array.from(rawData.matchAll(pattern))
-
-
-  const rawDataArray: RawScheduleData[] = []
-
-  for (const match of matches) {
-    const [, title, startdate, enddate, duration] = match.map((s) => s.trim())
-    
-    
-    rawDataArray.push({
-      title,
-      startdate,
-      enddate,
-      duration
-    })
-  }
-  
-
   try {
+    console.log("🔧 extractRawScheduleData: Starting extraction...")
+    console.log("🔧 Input data length:", rawData.length)
+    console.log("🔧 Input data preview:", rawData.substring(0, 200) + "...")
+    
+    const { createClient } = await import('./supabase/client')
+    const supabase = createClient()
+    console.log("🔧 Supabase client created successfully")
+
+    // Extract data using regex pattern - updated to handle your data format with multiline support
+    const pattern = /Title:(.*?)Startdate:(.*?)Enddate:(.*?)Duration:(.*?)(?=Title:|$)/gm
+    const matches = Array.from(rawData.matchAll(pattern))
+    console.log("🔧 Regex matches found:", matches.length)
+    
+    // Log first few matches to check for encoding issues
+    if (matches.length > 0) {
+      console.log("🔧 First match sample:", matches[0])
+      if (matches[0][2] && matches[0][2].includes("?")) {
+        console.warn("⚠️ Detected corrupted Chinese characters in input data")
+      }
+    }
+
+    const rawDataArray: RawScheduleData[] = []
+
+    for (const match of matches) {
+      const [, title, startdate, enddate, duration] = match.map((s) => s.trim())
+      
+      rawDataArray.push({
+        title,
+        startdate,
+        enddate,
+        duration
+      })
+    }
+    
+    console.log("🔧 Processed raw data array:", rawDataArray.length, "items")
     // Process data in batches to avoid URL length limits
     const BATCH_SIZE = 50 // Process 50 records at a time
     let insertedCount = 0
@@ -114,13 +126,17 @@ export async function extractRawScheduleData(rawData: string) {
       const batch = rawDataArray.slice(i, i + BATCH_SIZE)
 
       // Check for duplicates in this batch
+      console.log(`🔧 Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(rawDataArray.length/BATCH_SIZE)}`)
       const duplicateCheck = await supabase
         .from("schedule_data")
         .select("title, startdate")
         .in("title", batch.map(item => item.title))
         .in("startdate", batch.map(item => item.startdate))
 
-      if (duplicateCheck.error) throw duplicateCheck.error
+      if (duplicateCheck.error) {
+        console.error("❌ Duplicate check failed:", duplicateCheck.error)
+        throw duplicateCheck.error
+      }
 
       const existingData = duplicateCheck.data || []
       const newData = batch.filter(item => 
@@ -131,9 +147,14 @@ export async function extractRawScheduleData(rawData: string) {
 
       // Insert new data in this batch
       if (newData.length > 0) {
+        console.log(`🔧 Inserting ${newData.length} new records...`)
         const { error: insertError } = await supabase.from("schedule_data").insert(newData)
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error("❌ Insert failed:", insertError)
+          throw insertError
+        }
         insertedCount += newData.length
+        console.log(`✅ Inserted ${newData.length} records successfully`)
       }
 
       // Update existing data in this batch
@@ -159,6 +180,9 @@ export async function extractRawScheduleData(rawData: string) {
       }
     }
     
+    console.log("✅ extractRawScheduleData completed successfully!")
+    console.log(`📊 Final results: ${insertedCount} inserted, ${updatedCount} updated, ${rawDataArray.length} total`)
+    
     return { 
       success: true, 
       count: rawDataArray.length,
@@ -172,21 +196,39 @@ export async function extractRawScheduleData(rawData: string) {
 }
 
 // Step 2: Process raw data with intelligent matching and save to processed_schedule_data table
-export async function processScheduleDataFromRaw(): Promise<{ success: boolean; count?: number; inserted?: number; updated?: number; error?: string }> {
-  const { createClient } = await import('./supabase/client')
-  const supabase = createClient()
-
+export async function processScheduleDataFromRaw(onlyRecent: boolean = false): Promise<{ success: boolean; count?: number; inserted?: number; updated?: number; error?: string }> {
   try {
+    console.log("🔄 processScheduleDataFromRaw: Starting processing...", onlyRecent ? "(only recent data)" : "(all data)")
+    const { createClient } = await import('./supabase/client')
+    const supabase = createClient()
+    console.log("🔄 Supabase client created successfully")
+
     // Get raw data from schedule_data table
-    const { data: rawData, error: fetchError } = await supabase
+    console.log("🔄 Fetching raw data from schedule_data table...")
+    let query = supabase
       .from("schedule_data")
       .select("*")
       .order("created_at", { ascending: true })
+    
+    // If onlyRecent is true, get data from the last 5 minutes (created or updated)
+    if (onlyRecent) {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      query = query.or(`created_at.gte.${fiveMinutesAgo},updated_at.gte.${fiveMinutesAgo}`)
+      console.log("🔄 Only processing data from last 5 minutes (created or updated):", fiveMinutesAgo)
+    }
+    
+    const { data: rawData, error: fetchError } = await query
 
-    if (fetchError) throw fetchError
+    if (fetchError) {
+      console.error("❌ Failed to fetch raw data:", fetchError)
+      throw fetchError
+    }
     if (!rawData || rawData.length === 0) {
+      console.log("⚠️ No raw data found in schedule_data table")
       return { success: false, error: "No raw data found" }
     }
+    
+    console.log(`🔄 Found ${rawData.length} raw data records to process`)
 
     const processedData: CourseData[] = []
 
@@ -314,19 +356,30 @@ export async function saveProcessedDataToSupabase(processedData: CourseData[]) {
 
   try {
     // Prepare data for insertion
-    const dataToInsert = processedData.map(item => ({
-      title: item.title || '',
-      startdate: new Date(item.date).toISOString(),
-      enddate: new Date(item.date).toISOString(), // You might want to calculate this properly
-      duration: `${Math.floor(item.hours)}:${Math.floor((item.hours % 1) * 60)}:00`,
-      hours: item.hours,
-      date: item.date,
-      name: item.name,
-      fee_per_hour: item.fee_per_hour,
-      graduated: item.graduated,
-      parent: item.parent,
-      accompany_number: item.accompany_number,
-    }))
+    const dataToInsert = processedData.map(item => {
+      console.log("🔧 Preparing data for insertion:", item)
+      
+      // Validate date before creating Date objects
+      const dateObj = new Date(item.date)
+      if (isNaN(dateObj.getTime())) {
+        console.error("❌ Invalid date in processed data:", item.date)
+        throw new Error(`Invalid date: ${item.date}`)
+      }
+      
+      return {
+        title: item.title || '',
+        startdate: dateObj.toISOString(),
+        enddate: dateObj.toISOString(), // You might want to calculate this properly
+        duration: `${Math.floor(item.hours)}:${Math.floor((item.hours % 1) * 60)}:00`,
+        hours: item.hours,
+        date: item.date,
+        name: item.name,
+        fee_per_hour: item.fee_per_hour,
+        graduated: item.graduated,
+        parent: item.parent,
+        accompany_number: item.accompany_number,
+      }
+    })
 
     // Process data in batches to avoid URL length limits
     const BATCH_SIZE = 50 // Process 50 records at a time
@@ -428,22 +481,88 @@ export async function fetchProcessedDataFromSupabase() {
 
 function parseChineseDate(dateStr: string): Date | null {
   try {
-    // Format: 2025年8月31日 11:00
-    const cleaned = dateStr.replace("年", "-").replace("月", "-").replace("日", " ")
-    return new Date(cleaned)
-  } catch {
+    console.log("🔧 parseChineseDate: Parsing date:", dateStr)
+    
+    // Handle corrupted Chinese characters (年->?, 月->?, 日->?)
+    let year = "", month = "", day = "", time = ""
+    
+    if (dateStr.includes("?")) {
+      console.log("🔧 parseChineseDate: Detected corrupted Chinese characters, attempting to fix...")
+      // Try to reconstruct the date from the pattern
+      const match = dateStr.match(/(\d{4})\?(\d{1,2})\?(\d{1,2})\?\s+(\d{1,2}:\d{2})/)
+      if (match) {
+        [, year, month, day, time] = match
+        console.log("🔧 parseChineseDate: Reconstructed components:", { year, month, day, time })
+      } else {
+        console.error("❌ parseChineseDate: Cannot reconstruct corrupted date:", dateStr)
+        return null
+      }
+    } else {
+      // Normal Chinese date format: 2025年8月31日 11:00
+      const match = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}:\d{2})/)
+      if (match) {
+        [, year, month, day, time] = match
+        console.log("🔧 parseChineseDate: Extracted components:", { year, month, day, time })
+      } else {
+        console.error("❌ parseChineseDate: Cannot parse Chinese date format:", dateStr)
+        return null
+      }
+    }
+    
+    // Create date using Date constructor with individual components
+    // This is more reliable across different browsers
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1, // Month is 0-indexed
+      parseInt(day),
+      parseInt(time.split(':')[0]),
+      parseInt(time.split(':')[1])
+    )
+    
+    console.log("🔧 parseChineseDate: Date object created:", date)
+    console.log("🔧 parseChineseDate: Date.getTime():", date.getTime())
+    console.log("🔧 parseChineseDate: isNaN check:", isNaN(date.getTime()))
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.error("❌ parseChineseDate: Invalid date created from components:", { year, month, day, time })
+      return null
+    }
+    
+    console.log("✅ parseChineseDate: Valid date created:", date.toISOString())
+    return date
+  } catch (error) {
+    console.error("❌ parseChineseDate: Error parsing date:", dateStr, error)
     return null
   }
 }
 
 function parseSlashDate(dateStr: string): Date | null {
   try {
+    console.log("🔧 parseSlashDate: Parsing date:", dateStr)
     // Format: 31/08/25 12:30
     const [datePart, timePart] = dateStr.split(" ")
+    console.log("🔧 parseSlashDate: Date part:", datePart, "Time part:", timePart)
+    
     const [day, month, year] = datePart.split("/")
+    console.log("🔧 parseSlashDate: Split parts:", { day, month, year })
+    
     const fullYear = Number.parseInt(year) + 2000 // Assuming 20xx
-    return new Date(`${fullYear}-${month}-${day} ${timePart}`)
-  } catch {
+    const dateString = `${fullYear}-${month}-${day} ${timePart}`
+    console.log("🔧 parseSlashDate: Constructed date string:", dateString)
+    
+    const date = new Date(dateString)
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.error("❌ parseSlashDate: Invalid date created from:", dateString)
+      return null
+    }
+    
+    console.log("✅ parseSlashDate: Valid date created:", date.toISOString())
+    return date
+  } catch (error) {
+    console.error("❌ parseSlashDate: Error parsing date:", dateStr, error)
     return null
   }
 }

@@ -25,7 +25,6 @@ type SortDirection = 'asc' | 'desc'
 export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
   const [inputData, setInputData] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [isLoadingProcessedData, setIsLoadingProcessedData] = useState(false)
   const [processedData, setProcessedData] = useState<any[]>([])
   const [nameFilter, setNameFilter] = useState<string[]>([])
@@ -225,15 +224,67 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
 
     setIsProcessing(true)
     try {
+      // Add detailed logging for debugging
+      console.log("🚀 Starting data processing...")
+      console.log("📱 User Agent:", navigator.userAgent)
+      console.log("📊 Input data length:", inputData.length)
+      console.log("🌐 Network status:", navigator.onLine ? "Online" : "Offline")
+      
+      // Check if we're on iPad
+      const isIPad = /iPad/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      console.log("📱 Device type:", isIPad ? "iPad" : "Desktop/Other")
+      
+      // Additional iPad-specific checks
+      if (isIPad) {
+        console.log("📱 iPad detected - performing additional checks...")
+        console.log("📱 Touch points:", navigator.maxTouchPoints)
+        console.log("📱 Platform:", navigator.platform)
+        console.log("📱 Connection type:", (navigator as any).connection?.effectiveType || "Unknown")
+        console.log("📱 Connection downlink:", (navigator as any).connection?.downlink || "Unknown")
+        
+        // Check if we have a slow connection
+        const connection = (navigator as any).connection
+        if (connection && (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g')) {
+          console.warn("⚠️ Slow connection detected on iPad")
+          toast({
+            title: "Slow Connection",
+            description: "Your connection appears to be slow. Processing may take longer.",
+            variant: "default",
+          })
+        }
+      }
+
       // Step 1: Extract raw data and save to schedule_data table
-      const extractResult = await extractRawScheduleData(inputData)
+      console.log("📝 Step 1: Extracting raw data...")
+      
+      // Add timeout for iPad users (longer timeout for slower connections)
+      const timeoutMs = isIPad ? 60000 : 30000 // 60s for iPad, 30s for desktop
+      const extractResult = await Promise.race([
+        extractRawScheduleData(inputData),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs/1000} seconds`)), timeoutMs)
+        )
+      ]) as any
+      
+      console.log("📝 Extract result:", extractResult)
       
       if (!extractResult.success) {
-        throw new Error(extractResult.error)
+        console.error("❌ Extract failed:", extractResult.error)
+        throw new Error(`Data extraction failed: ${extractResult.error}`)
       }
 
       // Step 2: Process raw data with intelligent matching and save to processed_schedule_data table
-      const processResult = await processScheduleDataFromRaw()
+      console.log("🔄 Step 2: Processing data with intelligent matching...")
+      
+      const processResult = await Promise.race([
+        processScheduleDataFromRaw(true), // Only process recent data
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Processing timed out after ${timeoutMs/1000} seconds`)), timeoutMs)
+        )
+      ]) as any
+      
+      console.log("🔄 Process result:", processResult)
 
       if (processResult.success) {
         const extractMsg = (extractResult.inserted || 0) > 0 || (extractResult.updated || 0) > 0 
@@ -242,6 +293,9 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
         const processMsg = (processResult.inserted || 0) > 0 || (processResult.updated || 0) > 0
           ? `Processed data: ${processResult.inserted || 0} new, ${processResult.updated || 0} updated`
           : `Processed data: ${processResult.count || 0} total`
+
+        console.log("✅ Processing completed successfully!")
+        console.log("📊 Results:", { extractMsg, processMsg })
 
       toast({
         title: "Success",
@@ -252,14 +306,25 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
         await loadProcessedData() // Reload processed data
       onDataProcessed()
       } else {
-        throw new Error(processResult.error)
+        console.error("❌ Process failed:", processResult.error)
+        throw new Error(`Data processing failed: ${processResult.error}`)
       }
     } catch (error) {
-      console.error("Error processing data:", error)
+      console.error("💥 Error processing data:", error)
       const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      // Enhanced error message for iPad users
+      const isIPad = /iPad/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      
+      let enhancedErrorMessage = errorMessage
+      if (isIPad) {
+        enhancedErrorMessage = `iPad Error: ${errorMessage}. Please check your internet connection and try again.`
+      }
+      
       toast({
         title: "Error",
-        description: `Failed to process schedule data: ${errorMessage}`,
+        description: enhancedErrorMessage,
         variant: "destructive",
       })
     } finally {
@@ -267,55 +332,6 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
     }
   }
 
-  const handleSaveToSupabase = async () => {
-    if (!inputData.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter schedule data to process first",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSaving(true)
-    try {
-      // Step 1: Extract raw data and save to schedule_data table
-      const extractResult = await extractRawScheduleData(inputData)
-      
-      if (!extractResult.success) {
-        throw new Error(extractResult.error)
-      }
-
-      // Step 2: Process raw data with intelligent matching and save to processed_schedule_data table
-      const processResult = await processScheduleDataFromRaw()
-
-      if (processResult.success) {
-        const processMsg = (processResult.inserted || 0) > 0 || (processResult.updated || 0) > 0
-          ? `Saved ${processResult.inserted || 0} new, ${processResult.updated || 0} updated records to database`
-          : `Saved ${processResult.count || 0} records to database`
-        
-        toast({
-          title: "Success",
-          description: processMsg,
-        })
-        setIsDialogOpen(false) // Close dialog after successful saving
-        // Reload processed data
-        await loadProcessedData()
-      } else {
-        throw new Error(processResult.error)
-      }
-    } catch (error) {
-      console.error("Error saving to Supabase:", error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      toast({
-        title: "Error",
-        description: `Failed to save data to database: ${errorMessage}`,
-        variant: "destructive",
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
   return (
     <div className="h-full flex flex-col">
@@ -350,39 +366,20 @@ export function DataInputTab({ students, onDataProcessed }: DataInputTabProps) {
             <Button
               onClick={handleProcessData}
               disabled={isProcessing || !inputData.trim()}
-                        className="flex-1 bg-primary hover:bg-primary/90"
+                        className="w-full bg-primary hover:bg-primary/90"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Extracting Data
+                  Processing Data
                 </>
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Extracting Data
+                  Process & Save Data
                 </>
               )}
             </Button>
-                      
-                      <Button
-                        onClick={handleSaveToSupabase}
-                        disabled={isSaving || !inputData.trim()}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving to Database
-                          </>
-                        ) : (
-                          <>
-                            <Database className="mr-2 h-4 w-4" />
-                            Save to Database
-                          </>
-                        )}
-                      </Button>
                     </div>
       </div>
                 </DialogContent>

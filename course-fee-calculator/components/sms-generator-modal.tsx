@@ -372,16 +372,45 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
   }, [])
 
   const copyToClipboard = async () => {
+    const textToCopy = isSMSEditing ? editableSMS : generatedSMS
+    
     try {
-      await navigator.clipboard.writeText(isSMSEditing ? editableSMS : generatedSMS)
-      toast({
-        title: "Success",
-        description: "SMS copied to clipboard",
-      })
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy)
+        toast({
+          title: "Success",
+          description: "SMS copied to clipboard",
+        })
+        return
+      }
+      
+      // Fallback for older browsers or non-secure contexts (like iPad Safari)
+      const textArea = document.createElement('textarea')
+      textArea.value = textToCopy
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      textArea.style.top = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+      
+      if (successful) {
+        toast({
+          title: "Success",
+          description: "SMS copied to clipboard",
+        })
+      } else {
+        throw new Error('execCommand failed')
+      }
     } catch (error) {
+      console.error('Copy to clipboard failed:', error)
       toast({
         title: "Error",
-        description: "Failed to copy SMS",
+        description: "Failed to copy SMS. Please select and copy manually.",
         variant: "destructive",
       })
     }
@@ -414,7 +443,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            SMS Generator - {parentName}
+            {parentName}
           </DialogTitle>
         </DialogHeader>
 
@@ -629,31 +658,28 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
 
           {/* Right side - SMS Generator */}
           <div className="flex flex-col min-h-0 pl-4" style={{ flex: '1', minWidth: '0' }}>
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold">SMS Generator</h3>
-            </div>
             
             <div className="space-y-4 flex-1 flex flex-col min-h-0">
               {/* Language selection and Edit buttons in one row */}
               <div className="flex items-center justify-between">
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <Badge
                     variant={language === "en" ? "default" : "outline"}
-                    className="cursor-pointer px-4 py-2 text-sm"
+                    className="cursor-pointer px-2 py-1 text-xs"
                     onClick={() => setLanguage("en")}
                   >
                     English
                   </Badge>
                   <Badge
                     variant={language === "zh-cn" ? "default" : "outline"}
-                    className="cursor-pointer px-4 py-2 text-sm"
+                    className="cursor-pointer px-2 py-1 text-xs"
                     onClick={() => setLanguage("zh-cn")}
                   >
                     中文简体
                   </Badge>
                   <Badge
                     variant={language === "zh-tw" ? "default" : "outline"}
-                    className="cursor-pointer px-4 py-2 text-sm"
+                    className="cursor-pointer px-2 py-1 text-xs"
                     onClick={() => setLanguage("zh-tw")}
                   >
                     中文繁體
