@@ -116,8 +116,8 @@ export function MonthRangePicker({
     : placeholder
 
   const renderYearPanel = (year: number, isLeft: boolean) => (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between p-2 border-b">
+    <div className="flex flex-col w-[200px]">
+      <div className="flex items-center justify-between p-1.5 border-b">
         <Button
           variant="ghost"
           size="sm"
@@ -136,7 +136,7 @@ export function MonthRangePicker({
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-      <div className="grid grid-cols-4 gap-1 p-2">
+      <div className="grid grid-cols-4 gap-0.5 p-1.5">
         {months.map((month, index) => {
           const inRange = isInRange(year, index)
           const selected = isSelected(year, index)
@@ -184,13 +184,13 @@ export function MonthRangePicker({
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-auto min-w-[500px]" align="start">
+        <PopoverContent className="p-0 w-fit" align="start">
           <div className="flex">
             {renderYearPanel(currentYear, true)}
             <div className="w-px bg-border" />
             {renderYearPanel(currentYear + 1, false)}
           </div>
-          <div className="flex items-center justify-between p-2 border-t">
+          <div className="flex items-center justify-between p-1.5 border-t">
             <Button variant="ghost" size="sm" onClick={handleClear}>
               Clear
             </Button>

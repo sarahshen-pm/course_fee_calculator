@@ -15,6 +15,7 @@ export interface ScheduleData {
 
 // Student profile interface (for students table - standard information only)
 export interface StudentProfile {
+  id?: string
   name: string
   fee_per_hour: number
   graduated: string
@@ -33,6 +34,9 @@ export interface CourseData {
   hours: number
   date: string
   title?: string
+  rawStartdate?: string  // Keep original startdate from schedule_data
+  rawEnddate?: string    // Keep original enddate from schedule_data
+  duration?: string      // Keep original duration from schedule_data
 }
 
 // Complete student database based on your Python data
@@ -85,7 +89,7 @@ export async function extractRawScheduleData(rawData: string) {
     console.log("🔧 extractRawScheduleData: Starting extraction...")
     console.log("🔧 Input data length:", rawData.length)
     console.log("🔧 Input data preview:", rawData.substring(0, 200) + "...")
-    
+
     const { createClient } = await import('./supabase/client')
     const supabase = createClient()
     console.log("🔧 Supabase client created successfully")
@@ -94,7 +98,7 @@ export async function extractRawScheduleData(rawData: string) {
     const pattern = /Title:(.*?)Startdate:(.*?)Enddate:(.*?)Duration:(.*?)(?=Title:|$)/gm
     const matches = Array.from(rawData.matchAll(pattern))
     console.log("🔧 Regex matches found:", matches.length)
-    
+
     // Log first few matches to check for encoding issues
     if (matches.length > 0) {
       console.log("🔧 First match sample:", matches[0])
@@ -107,7 +111,7 @@ export async function extractRawScheduleData(rawData: string) {
 
     for (const match of matches) {
       const [, title, startdate, enddate, duration] = match.map((s) => s.trim())
-      
+
       rawDataArray.push({
         title,
         startdate,
@@ -115,7 +119,7 @@ export async function extractRawScheduleData(rawData: string) {
         duration
       })
     }
-    
+
     console.log("🔧 Processed raw data array:", rawDataArray.length, "items")
     // Process data in batches to avoid URL length limits
     const BATCH_SIZE = 50 // Process 50 records at a time
@@ -126,7 +130,7 @@ export async function extractRawScheduleData(rawData: string) {
       const batch = rawDataArray.slice(i, i + BATCH_SIZE)
 
       // Check for duplicates in this batch
-      console.log(`🔧 Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(rawDataArray.length/BATCH_SIZE)}`)
+      console.log(`🔧 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(rawDataArray.length / BATCH_SIZE)}`)
       const duplicateCheck = await supabase
         .from("schedule_data")
         .select("title, startdate")
@@ -139,8 +143,8 @@ export async function extractRawScheduleData(rawData: string) {
       }
 
       const existingData = duplicateCheck.data || []
-      const newData = batch.filter(item => 
-        !existingData.some(existing => 
+      const newData = batch.filter(item =>
+        !existingData.some(existing =>
           existing.title === item.title && existing.startdate === item.startdate
         )
       )
@@ -159,10 +163,10 @@ export async function extractRawScheduleData(rawData: string) {
 
       // Update existing data in this batch
       for (const item of batch) {
-        const existingItem = existingData.find(existing => 
+        const existingItem = existingData.find(existing =>
           existing.title === item.title && existing.startdate === item.startdate
         )
-        
+
         if (existingItem) {
           const { error: updateError } = await supabase
             .from("schedule_data")
@@ -173,18 +177,18 @@ export async function extractRawScheduleData(rawData: string) {
             })
             .eq("title", item.title)
             .eq("startdate", item.startdate)
-          
+
           if (updateError) throw updateError
           updatedCount++
         }
       }
     }
-    
+
     console.log("✅ extractRawScheduleData completed successfully!")
     console.log(`📊 Final results: ${insertedCount} inserted, ${updatedCount} updated, ${rawDataArray.length} total`)
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       count: rawDataArray.length,
       inserted: insertedCount,
       updated: updatedCount
@@ -209,14 +213,14 @@ export async function processScheduleDataFromRaw(onlyRecent: boolean = false): P
       .from("schedule_data")
       .select("*")
       .order("created_at", { ascending: true })
-    
+
     // If onlyRecent is true, get data from the last 5 minutes (created or updated)
     if (onlyRecent) {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
       query = query.or(`created_at.gte.${fiveMinutesAgo},updated_at.gte.${fiveMinutesAgo}`)
       console.log("🔄 Only processing data from last 5 minutes (created or updated):", fiveMinutesAgo)
     }
-    
+
     const { data: rawData, error: fetchError } = await query
 
     if (fetchError) {
@@ -227,17 +231,17 @@ export async function processScheduleDataFromRaw(onlyRecent: boolean = false): P
       console.log("⚠️ No raw data found in schedule_data table")
       return { success: false, error: "No raw data found" }
     }
-    
+
     console.log(`🔄 Found ${rawData.length} raw data records to process`)
 
     const processedData: CourseData[] = []
 
     for (const item of rawData) {
-      
+
       // Parse dates
       const parsedStartdate = parseChineseDate(item.startdate)
       const parsedEnddate = parseSlashDate(item.enddate)
-      
+
       if (!parsedStartdate || !parsedEnddate) {
         continue
       }
@@ -274,15 +278,18 @@ export async function processScheduleDataFromRaw(onlyRecent: boolean = false): P
         hours: adjustedHours,
         date: parsedStartdate.toISOString().split("T")[0],
         title: item.title,
+        rawStartdate: item.startdate,   // Keep original startdate with time
+        rawEnddate: item.enddate,       // Keep original enddate with time
+        duration: item.duration,        // Keep original duration
       }
-      
+
       processedData.push(processedItem)
     }
 
     // Filter valid data
-    const validData = processedData.filter((item) => 
-      item.name && 
-      item.name.trim() !== "" && 
+    const validData = processedData.filter((item) =>
+      item.name &&
+      item.name.trim() !== "" &&
       item.hours > 0
     )
 
@@ -342,9 +349,9 @@ export function processScheduleData(rawData: string): CourseData[] {
   }
 
   // Filter out invalid entries - same logic as Python
-  return processedData.filter((item) => 
-    item.name && 
-    item.name.trim() !== "" && 
+  return processedData.filter((item) =>
+    item.name &&
+    item.name.trim() !== "" &&
     item.hours > 0
   )
 }
@@ -358,19 +365,39 @@ export async function saveProcessedDataToSupabase(processedData: CourseData[]) {
     // Prepare data for insertion
     const dataToInsert = processedData.map(item => {
       console.log("🔧 Preparing data for insertion:", item)
-      
-      // Validate date before creating Date objects
-      const dateObj = new Date(item.date)
-      if (isNaN(dateObj.getTime())) {
-        console.error("❌ Invalid date in processed data:", item.date)
-        throw new Error(`Invalid date: ${item.date}`)
+
+      // Use rawStartdate and rawEnddate if available, otherwise fall back to date
+      let startdateToInsert: string
+      let enddateToInsert: string
+
+      if (item.rawStartdate && item.rawEnddate) {
+        // Use original startdate and enddate from schedule_data (preserves time)
+        const parsedStartdate = parseChineseDate(item.rawStartdate)
+        const parsedEnddate = parseSlashDate(item.rawEnddate)
+
+        if (!parsedStartdate || !parsedEnddate) {
+          console.error("❌ Failed to parse raw dates:", item.rawStartdate, item.rawEnddate)
+          throw new Error(`Invalid raw dates: ${item.rawStartdate}, ${item.rawEnddate}`)
+        }
+
+        startdateToInsert = parsedStartdate.toISOString()
+        enddateToInsert = parsedEnddate.toISOString()
+      } else {
+        // Fall back to using date field (legacy behavior)
+        const dateObj = new Date(item.date)
+        if (isNaN(dateObj.getTime())) {
+          console.error("❌ Invalid date in processed data:", item.date)
+          throw new Error(`Invalid date: ${item.date}`)
+        }
+        startdateToInsert = dateObj.toISOString()
+        enddateToInsert = dateObj.toISOString()
       }
-      
+
       return {
         title: item.title || '',
-        startdate: dateObj.toISOString(),
-        enddate: dateObj.toISOString(), // You might want to calculate this properly
-        duration: `${Math.floor(item.hours)}:${Math.floor((item.hours % 1) * 60)}:00`,
+        startdate: startdateToInsert,
+        enddate: enddateToInsert,
+        duration: item.duration || `${Math.floor(item.hours)}:${Math.floor((item.hours % 1) * 60)}:00`,
         hours: item.hours,
         date: item.date,
         name: item.name,
@@ -400,10 +427,10 @@ export async function saveProcessedDataToSupabase(processedData: CourseData[]) {
       if (duplicateCheck.error) throw duplicateCheck.error
 
       const existingData = duplicateCheck.data || []
-      const newData = batch.filter(item => 
-        !existingData.some(existing => 
-          existing.name === item.name && 
-          existing.date === item.date && 
+      const newData = batch.filter(item =>
+        !existingData.some(existing =>
+          existing.name === item.name &&
+          existing.date === item.date &&
           existing.title === item.title
         )
       )
@@ -417,12 +444,12 @@ export async function saveProcessedDataToSupabase(processedData: CourseData[]) {
 
       // Update existing data in this batch
       for (const item of batch) {
-        const existingItem = existingData.find(existing => 
-          existing.name === item.name && 
-          existing.date === item.date && 
+        const existingItem = existingData.find(existing =>
+          existing.name === item.name &&
+          existing.date === item.date &&
           existing.title === item.title
         )
-        
+
         if (existingItem) {
           const { error: updateError } = await supabase
             .from("processed_schedule_data")
@@ -440,15 +467,15 @@ export async function saveProcessedDataToSupabase(processedData: CourseData[]) {
             .eq("name", item.name)
             .eq("date", item.date)
             .eq("title", item.title)
-          
+
           if (updateError) throw updateError
           updatedCount++
         }
       }
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       count: processedData.length,
       inserted: insertedCount,
       updated: updatedCount
@@ -482,10 +509,10 @@ export async function fetchProcessedDataFromSupabase() {
 function parseChineseDate(dateStr: string): Date | null {
   try {
     console.log("🔧 parseChineseDate: Parsing date:", dateStr)
-    
+
     // Handle corrupted Chinese characters (年->?, 月->?, 日->?)
     let year = "", month = "", day = "", time = ""
-    
+
     if (dateStr.includes("?")) {
       console.log("🔧 parseChineseDate: Detected corrupted Chinese characters, attempting to fix...")
       // Try to reconstruct the date from the pattern
@@ -508,7 +535,7 @@ function parseChineseDate(dateStr: string): Date | null {
         return null
       }
     }
-    
+
     // Create date using Date constructor with individual components
     // This is more reliable across different browsers
     const date = new Date(
@@ -518,17 +545,17 @@ function parseChineseDate(dateStr: string): Date | null {
       parseInt(time.split(':')[0]),
       parseInt(time.split(':')[1])
     )
-    
+
     console.log("🔧 parseChineseDate: Date object created:", date)
     console.log("🔧 parseChineseDate: Date.getTime():", date.getTime())
     console.log("🔧 parseChineseDate: isNaN check:", isNaN(date.getTime()))
-    
+
     // Check if the date is valid
     if (isNaN(date.getTime())) {
       console.error("❌ parseChineseDate: Invalid date created from components:", { year, month, day, time })
       return null
     }
-    
+
     console.log("✅ parseChineseDate: Valid date created:", date.toISOString())
     return date
   } catch (error) {
@@ -543,22 +570,22 @@ function parseSlashDate(dateStr: string): Date | null {
     // Format: 31/08/25 12:30
     const [datePart, timePart] = dateStr.split(" ")
     console.log("🔧 parseSlashDate: Date part:", datePart, "Time part:", timePart)
-    
+
     const [day, month, year] = datePart.split("/")
     console.log("🔧 parseSlashDate: Split parts:", { day, month, year })
-    
+
     const fullYear = Number.parseInt(year) + 2000 // Assuming 20xx
     const dateString = `${fullYear}-${month}-${day} ${timePart}`
     console.log("🔧 parseSlashDate: Constructed date string:", dateString)
-    
+
     const date = new Date(dateString)
-    
+
     // Check if the date is valid
     if (isNaN(date.getTime())) {
       console.error("❌ parseSlashDate: Invalid date created from:", dateString)
       return null
     }
-    
+
     console.log("✅ parseSlashDate: Valid date created:", date.toISOString())
     return date
   } catch (error) {
@@ -569,25 +596,39 @@ function parseSlashDate(dateStr: string): Date | null {
 
 function durationToHours(duration: string): number | null {
   try {
-    const [h, m, s] = duration.split(":").map(Number)
-    return h + m / 60 + s / 3600
-  } catch {
+    const parts = duration.split(":").map(Number)
+
+    // Handle different duration formats
+    if (parts.length === 3) {
+      // Format: h:mm:ss (e.g., "3:00:00" or "1:30:00")
+      const [h, m, s] = parts
+      return h + m / 60 + s / 3600
+    } else if (parts.length === 2) {
+      // Format: mm:ss (e.g., "30:00" for 30 minutes)
+      const [m, s] = parts
+      return m / 60 + s / 3600
+    } else {
+      console.error("❌ durationToHours: Invalid duration format:", duration)
+      return null
+    }
+  } catch (error) {
+    console.error("❌ durationToHours: Error parsing duration:", duration, error)
     return null
   }
 }
 
 function matchNames(title: string, studentNames: string[]): string | null {
-  
+
   // 更智能的姓名匹配逻辑
   const matches = studentNames.filter((name) => {
     const nameLower = name.toLowerCase()
     const titleLower = title.toLowerCase()
-    
+
     // 直接包含匹配
     if (titleLower.includes(nameLower)) {
       return true
     }
-    
+
     // 处理中文姓名的部分匹配
     if (nameLower.includes('凯文') && titleLower.includes('凯文')) {
       return true
@@ -604,7 +645,7 @@ function matchNames(title: string, studentNames: string[]): string | null {
     if (nameLower.includes('惠宁') && titleLower.includes('惠宁')) {
       return true
     }
-    
+
     // 处理英文名的部分匹配
     if (nameLower.includes('kevan') && titleLower.includes('kevan')) {
       return true
@@ -618,10 +659,10 @@ function matchNames(title: string, studentNames: string[]): string | null {
     if (nameLower.includes('ian') && titleLower.includes('ian')) {
       return true
     }
-    
+
     return false
   })
-  
+
   return matches.length > 0 ? matches[0] : null // 只返回第一个匹配的学生
 }
 

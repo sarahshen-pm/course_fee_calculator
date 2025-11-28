@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Copy, MessageSquare, X } from "lucide-react"
+import { Copy, MessageSquare, X, CalendarIcon } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import type { CourseData } from "@/lib/data-processor"
 
@@ -34,6 +38,28 @@ const formatDate = (dateString: string) => {
   } catch {
     return dateString // Return original if error
   }
+}
+
+// Format date to dd MMM format (e.g., "15 Sep")
+const formatDateShort = (dateString: string) => {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return dateString // Return original if invalid date
+    }
+    const day = date.getDate()
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const month = monthNames[date.getMonth()]
+    return `${day} ${month}`
+  } catch {
+    return dateString // Return original if error
+  }
+}
+
+// Format amount to remove unnecessary decimal zeros
+const formatAmount = (amount: number) => {
+  // Remove trailing zeros: 100.00 -> 100, 100.50 -> 100.5
+  return parseFloat(amount.toFixed(2)).toString()
 }
 
 // Stable input component to prevent focus loss
@@ -74,13 +100,13 @@ const StableInput = React.memo(({
 
 const templates = {
   en: {
-    single: `Hi [Parent], I hope this message finds you well 🌸.
+    single: `Hi [Parent],
 Here is the [Name]'s tuition fee update for [Smallest Date] – [Largest Date]:
 • Rate: SGD [Average Fee]/hour
 • Total lesson hours: [Sum of Hours] hours
 
 Calculation:
-[Sum of Hours] hours ✖ SGD [Average Fee]/hour 
+[Sum of Hours] hours ✖ SGD [Average Fee]/hour
 = SGD [Total Fee]
 
 📑 For a detailed breakdown, please kindly refer to the attached table.
@@ -93,7 +119,7 @@ When making the transfer, kindly include "[Name] + tuition month/year" in the re
 
 Thank you very much for your support 🌸`,
 
-    multiple: `Hi [Parent], I hope this message finds you well 🌸.
+    multiple: `Hi [Parent],
 
 [Name1] and [Name2]'s tuition fee is SGD [Average Fee]/hour.
 For the period from [Smallest Date] to [Largest Date]:
@@ -209,21 +235,58 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
   const [selectedNameFilter, setSelectedNameFilter] = useState<string>("All")
   const [showRemarks, setShowRemarks] = useState(false)
 
-  // Generate SMS function
+  // Use ref to store latest editableData without triggering re-renders
+  const editableDataRef = React.useRef<EditableStudentData[]>([])
+  React.useEffect(() => {
+    editableDataRef.current = editableData
+  }, [editableData])
+
+  // Generate SMS function - use ref to avoid re-creating on every editableData change
   const generateSMS = useCallback((selectedLanguage: Language = language) => {
-    if (editableData.length === 0) {
+    const currentData = editableDataRef.current
+    if (currentData.length === 0) {
       setGeneratedSMS("")
       setEditableSMS("")
       return
     }
 
-    const totalHours = editableData.reduce((sum, s) => sum + s.hours, 0)
-    const totalFee = editableData.reduce((sum, s) => sum + s.total, 0)
-    const avgFee = editableData.reduce((sum, s) => sum + s.fee_per_hour, 0) / editableData.length
-    const students = editableData.map(s => s.name)
-    const dates = editableData.map(s => s.date).sort()
-    const formattedDates = dates.map(date => formatDate(date))
-    
+    const totalHours = currentData.reduce((sum, s) => sum + s.hours, 0)
+    const totalFee = currentData.reduce((sum, s) => sum + s.total, 0)
+    const avgFee = currentData.reduce((sum, s) => sum + s.fee_per_hour, 0) / currentData.length
+    const students = currentData.map(s => s.name)
+    const dates = currentData.map(s => s.date).sort()
+
+    // Format date range based on language
+    let dateRangeText = ""
+    const startDate = new Date(dates[0])
+    const endDate = new Date(dates[dates.length - 1])
+    const startMonth = startDate.getMonth() + 1
+    const endMonth = endDate.getMonth() + 1
+
+    if (selectedLanguage === 'en') {
+      // English: Show month abbreviation (Sep, Oct, etc.)
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      const startMonthName = monthNames[startDate.getMonth()]
+      const endMonthName = monthNames[endDate.getMonth()]
+
+      if (startMonthName === endMonthName) {
+        // Same month: just show "Sep"
+        dateRangeText = startMonthName
+      } else {
+        // Different months: show "Sep - Oct"
+        dateRangeText = `${startMonthName} - ${endMonthName}`
+      }
+    } else {
+      // Chinese: Show month format (9月 or 9月 - 10月)
+      if (startMonth === endMonth) {
+        // Same month: just show "9月"
+        dateRangeText = `${startMonth}月`
+      } else {
+        // Different months: show "9月 - 10月"
+        dateRangeText = `${startMonth}月 - ${endMonth}月`
+      }
+    }
+
     // 根据实际学生数量决定模板类型
     const uniqueStudents = Array.from(new Set(students))
     const isMultiple = uniqueStudents.length > 1
@@ -231,24 +294,25 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
 
     let sms = template
       .replace(/\[Parent\]/g, parentName)
-      .replace(/\[Average Fee\]/g, avgFee.toFixed(2))
-      .replace(/\[Sum of Hours\]/g, totalHours.toFixed(1))
-      .replace(/\[Total Fee\]/g, totalFee.toFixed(2))
-      .replace(/\[Smallest Date\]/g, formattedDates[0] || "")
-      .replace(/\[Largest Date\]/g, formattedDates[formattedDates.length - 1] || "")
+      .replace(/\[Average Fee\]/g, formatAmount(avgFee))
+      .replace(/\[Sum of Hours\]/g, formatAmount(totalHours))
+      .replace(/\[Total Fee\]/g, formatAmount(totalFee))
+      .replace(/\[Smallest Date\] – \[Largest Date\]/g, dateRangeText)
+      .replace(/\[Smallest Date\] 到 \[Largest Date\]/g, dateRangeText)
+      .replace(/\[Smallest Date\] to \[Largest Date\]/g, dateRangeText)
 
     if (isMultiple && uniqueStudents.length >= 2) {
       // Multiple template: 替换学生姓名和各自的小时数
       const student1 = uniqueStudents[0]
       const student2 = uniqueStudents[1]
-      const student1Hours = editableData.filter(s => s.name === student1).reduce((sum, s) => sum + s.hours, 0)
-      const student2Hours = editableData.filter(s => s.name === student2).reduce((sum, s) => sum + s.hours, 0)
-      
+      const student1Hours = currentData.filter(s => s.name === student1).reduce((sum, s) => sum + s.hours, 0)
+      const student2Hours = currentData.filter(s => s.name === student2).reduce((sum, s) => sum + s.hours, 0)
+
       sms = sms
         .replace(/\[Name1\]/g, student1)
         .replace(/\[Name2\]/g, student2)
-        .replace(/\[Sum of Hours1\]/g, student1Hours.toFixed(1))
-        .replace(/\[Sum of Hours2\]/g, student2Hours.toFixed(1))
+        .replace(/\[Sum of Hours1\]/g, formatAmount(student1Hours))
+        .replace(/\[Sum of Hours2\]/g, formatAmount(student2Hours))
     } else {
       // Single template: 替换单个学生姓名
       sms = sms.replace(/\[Name\]/g, uniqueStudents[0] || "")
@@ -256,7 +320,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
 
     setGeneratedSMS(sms)
     setEditableSMS(sms) // 同时更新可编辑的SMS内容
-  }, [editableData, language, parentName])
+  }, [language, parentName])
 
   // Initialize editable data when modal opens - use raw detail data
   React.useEffect(() => {
@@ -274,15 +338,17 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
         created_at: new Date().toISOString(),
         isEditing: false // 现有数据默认不在编辑模式
       })))
+      // Generate SMS after initializing data
+      setTimeout(() => generateSMS(), 0)
     }
   }, [isOpen, filteredData])
 
-  // Auto-generate SMS when language changes, modal opens, or editableData changes
+  // Regenerate SMS when language changes
   React.useEffect(() => {
     if (editableData.length > 0) {
-      generateSMS()
+      generateSMS(language)
     }
-  }, [generateSMS, isOpen])
+  }, [language])
 
   // Get unique student names for filter
   const uniqueNames = React.useMemo(() => {
@@ -326,6 +392,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
 
   const addNewRow = useCallback(() => {
     const newRow: EditableStudentData = {
+      id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: '',
       parent: parentName,
       date: '',
@@ -363,7 +430,16 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
     setEditableData(prev => {
       const newData = [...prev]
       newData[index] = { ...newData[index], isEditing: false }
-      return newData
+      // Sort by Name then Date after saving
+      return newData.sort((a, b) => {
+        // First sort by name
+        const nameComparison = a.name.localeCompare(b.name)
+        if (nameComparison !== 0) {
+          return nameComparison
+        }
+        // If names are the same, sort by date
+        return a.date.localeCompare(b.date)
+      })
     })
     // Update SMS after saving
     setTimeout(() => {
@@ -514,7 +590,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                     )
                     
                     return (
-                    <tr key={student.id || `${student.name}-${student.date}-${student.hours}`} className="border-b hover:bg-muted/30 h-6">
+                    <tr key={student.id} className="border-b hover:bg-muted/30 h-6">
                       <td className="px-2 py-1 text-center text-muted-foreground text-xs">
                         {index + 1}
                       </td>
@@ -531,11 +607,33 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                       </td>
                       <td className="px-2 py-1">
                         {student.isEditing ? (
-                          <StableInput
-                            value={student.date}
-                            onChange={(value) => updateEditableData(originalIndex, 'date', value)}
-                            className="h-6 text-xs px-2 py-1 w-full"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                  "h-6 w-full justify-start text-left font-normal text-xs px-2",
+                                  !student.date && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-1 h-3 w-3" />
+                                {student.date ? formatDate(student.date) : "Pick"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={student.date ? new Date(student.date) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    updateEditableData(originalIndex, 'date', format(date, 'yyyy-MM-dd'))
+                                  }
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                         ) : (
                           <span className="text-xs whitespace-nowrap">{formatDate(student.date)}</span>
                         )}
@@ -569,7 +667,7 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                         )}
                       </td>
                       <td className="px-2 py-1 text-center font-medium text-primary text-xs">
-                        ${student.total.toFixed(2)}
+                        ${formatAmount(student.total)}
                       </td>
                       {showRemarks && (
                         <td className="px-2 py-1 text-left text-xs">
@@ -643,11 +741,11 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                     </td>
                     <td className="px-2 py-1"></td>
                     <td className="px-2 py-1 text-primary font-semibold">
-                      {filteredAndSortedData.reduce((sum, item) => sum + item.hours, 0).toFixed(1)}h
+                      {formatAmount(filteredAndSortedData.reduce((sum, item) => sum + item.hours, 0))}h
                     </td>
                     <td className="px-2 py-1"></td>
                     <td className="px-2 py-1 text-primary font-semibold">
-                      ${filteredAndSortedData.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                      ${formatAmount(filteredAndSortedData.reduce((sum, item) => sum + item.total, 0))}
                     </td>
                     <td className="px-2 py-1"></td>
                   </tr>
@@ -686,20 +784,28 @@ export function SMSGeneratorModal({ isOpen, onClose, parentName, filteredData }:
                   </Badge>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    onClick={() => generateSMS()}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                  >
+                    Regenerate
+                  </Button>
                   {generatedSMS && (
                     <>
-                      <Button 
-                        onClick={toggleSMSEdit} 
-                        variant={isSMSEditing ? "default" : "outline"} 
+                      <Button
+                        onClick={toggleSMSEdit}
+                        variant={isSMSEditing ? "default" : "outline"}
                         size="sm"
                         className="h-8 px-3 text-xs"
                       >
                         {isSMSEditing ? "Save" : "Edit"}
                       </Button>
                       {isSMSEditing && (
-                        <Button 
-                          onClick={resetSMS} 
-                          variant="outline" 
+                        <Button
+                          onClick={resetSMS}
+                          variant="outline"
                           size="sm"
                           className="h-8 px-3 text-xs"
                         >
