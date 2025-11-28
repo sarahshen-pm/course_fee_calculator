@@ -127,13 +127,41 @@
 }
 
 .material-table th {
-  @apply bg-muted/50 border border-border px-4 py-3 text-left font-medium text-muted-foreground;
+  @apply bg-muted/50 border border-border px-4 text-left font-medium text-muted-foreground;
+  font-size: 16px !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
 }
 
 .material-table td {
-  @apply border border-border px-4 py-3;
+  @apply border border-border px-4;
+  font-size: 16px !important;
+  line-height: 1.6;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  min-height: 48px;
+}
+
+/* Override component-specific height constraints */
+.material-table tbody tr {
+  height: auto !important;
+  min-height: 48px;
+}
+
+.material-table thead tr {
+  height: auto !important;
+  min-height: 52px;
+}
+
+/* Zebra striping - alternating white and gray rows */
+.material-table tbody tr:nth-child(odd) {
+  @apply bg-white dark:bg-gray-900;
+}
+
+.material-table tbody tr:nth-child(even) {
+  @apply bg-gray-50 dark:bg-gray-800;
 }
 
 .material-table tbody tr:hover {
-  @apply bg-muted/30;
+  @apply bg-blue-50 dark:bg-blue-900/20;
 }
