@@ -32,16 +32,13 @@ export function MonthRangePicker({
   const [selectedStart, setSelectedStart] = React.useState<string | null>(null)
   const [selectedEnd, setSelectedEnd] = React.useState<string | null>(null)
 
-  // Initialize with default 6 months range
+  // Initialize with default current month only
   React.useEffect(() => {
     if (!value) {
       const now = new Date()
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-      
-      const startMonth = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, '0')}`
-      const endMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      
-      onChange({ startMonth, endMonth })
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      onChange({ startMonth: currentMonth, endMonth: currentMonth })
     }
   }, [value, onChange])
 
